@@ -1,5 +1,5 @@
 
-
+import mpnum as mp
 import numpy as np
 from scipy.linalg import block_diag
 import matplotlib.pyplot as plt
@@ -17,37 +17,37 @@ gm = 2.00231930436
 gyro = 699.9e3
 
 # identity matrix
-_ID = np.matrix([[1, 0], [0, 1]])
+_ID = np.array([[1, 0], [0, 1]])
 # X gate
-_X = np.matrix([[0, 1], [1, 0]])
+_X = np.array([[0, 1], [1, 0]])
 # Z gate
-_Z = np.matrix([[1, 0], [0, -1]])
+_Z = np.array([[1, 0], [0, -1]])
 # Hadamard gate
-_H = (1/np.sqrt(2))*np.matrix([[1, 1], [1, -1]])
+_H = (1/np.sqrt(2))*np.array([[1, 1], [1, -1]])
 # Y Gate
-_Y = np.matrix([[0, -1j], [1j, 0]])
+_Y = np.array([[0, -1j], [1j, 0]])
 # S gate
-_S = np.matrix([[1, 0], [0, 1j]])
+_S = np.array([[1, 0], [0, 1j]])
 # Sdg gate
-_Sdg = np.matrix([[1, 0], [0, -1j]])
+_Sdg = np.array([[1, 0], [0, -1j]])
 # T gate
-_T = np.matrix([[1, 0], [0, (1 + 1j)/np.sqrt(2)]])
+_T = np.array([[1, 0], [0, (1 + 1j)/np.sqrt(2)]])
 # Tdg gate
-_Tdg = np.matrix([[1, 0], [0, (1 - 1j)/np.sqrt(2)]])
+_Tdg = np.array([[1, 0], [0, (1 - 1j)/np.sqrt(2)]])
 # R gate
-_R = np.matrix([[0,1-1j],[1+1j,0]])/np.sqrt(2)
+_R = np.array([[0,1-1j],[1+1j,0]])/np.sqrt(2)
 # CNOT gate
-_CX = np.matrix([[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 0, 1], [0, 0, 1, 0]])
+_CX = np.array([[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 0, 1], [0, 0, 1, 0]])
 # CNOT inverse
-_CXdg = np.matrix([[1, 0, 0, 0], [0, 0, 0, 1], [0, 0, 1, 0], [0, 1, 0, 0]])
+_CXdg = np.array([[1, 0, 0, 0], [0, 0, 0, 1], [0, 0, 1, 0], [0, 1, 0, 0]])
 # SWAP gate
-_SWAP = np.matrix([[1, 0, 0, 0], [0, 0, 1, 0], [0, 1, 0, 1], [0, 0, 0, 1]])
+_SWAP = np.array([[1, 0, 0, 0], [0, 0, 1, 0], [0, 1, 0, 1], [0, 0, 0, 1]])
 # toffoli gate
 _TOFFOLI = block_diag(_ID, _ID, _CX)
 # zero state
-_pz = np.matrix([[1,0],[0,0]])
+_pz = np.array([[1,0],[0,0]])
 # one state
-_po = np.matrix([[0,0],[0,1]])
+_po = np.array([[0,0],[0,1]])
 
 def dagger(a):
         return np.transpose(np.conjugate(a))
@@ -69,6 +69,16 @@ op1 = {'h':   _H,
         'toff': _TOFFOLI,
         'pz': _pz,
         'po': _po}
+
+# define matrix product states for useful operators
+mpo_dict = {'id': mp.MPArray.from_array_global(op1['id'], ndims=2),
+            'h': mp.MPArray.from_array_global(op1['h'], ndims=2),
+            'x': mp.MPArray.from_array_global(op1['x'], ndims=2),
+            'y': mp.MPArray.from_array_global(op1['y'], ndims=2),
+            'z': mp.MPArray.from_array_global(op1['z'], ndims=2),
+            's': mp.MPArray.from_array_global(op1['s'], ndims=2),
+            't': mp.MPArray.from_array_global(op1['t'], ndims=2),
+            'cx': mp.MPArray.from_array_global(op1['cx'].reshape([2,2,2,2]), ndims=2)}
 
 
 

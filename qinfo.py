@@ -39,6 +39,12 @@ def dagger(M):
     return np.transpose(np.conjugate(M))
 
 
+def eye_like(m, dtype=np.complex128):
+    """
+    Returns identity matrix with same dims as square matrix m.
+    """
+    return np.eye(np.shape(m)[0], dtype=dtype)
+
 # computes the partial trace of density operator m \in L(H_d), tracing out subsystems in the list sys
 def partialtrace(m, sys):
     # type enforcement
@@ -92,6 +98,20 @@ def opbasis(qnum):
     # return operator basis
     return operbasis
 
+def bell_gen(N=2):
+    """"
+    Generate an N qubit Bell state |psi^+>
+    """
+
+    bell = np.zeros((2**N,2**N), dtype=np.complex128)
+
+    # exploit structure rather than constructing a circuit
+    bell[0,0] = 0.5
+    bell[-1,0] = 0.5
+    bell[0,-1] = 0.5
+    bell[-1,-1] = 0.5
+
+    return bell
 
 def rho_gen(N=1):
     """
@@ -562,30 +582,6 @@ class ControlSpan():
         else:
             raise StopIteration
 
-def Grover_U():
-    """
-    Computes the unitary implementing the N-1 qubit Grover algorithm
-    searching for the 2^(N) state e.g f(x)=0 iff x!=2^(N)
-    """
-    # First lets initialise the Grover unitary as the identiy
-    U = np.eye(2**N)
-
-    # initialise the superposition by abusing kronjob
-    H = kronjob([op1['h']],[0]*N)
-    U = H @ U
-
-    # compute 2 qubit oracle
-    oracle_U = kronjob([op1['h'],op1['id']],[1,0])
-    oracle_U = oracle_U @ op1['cx'] @ oracle_U
-
-    # construct diffusion operator
-    diffU = 1
-
-    # apply sqrt(N) times
-    iterations = int(round(np.sqrt(N)))
-
-    # final 
-
 
 def Universal_U():
     """
@@ -593,23 +589,26 @@ def Universal_U():
     """
 
     # base unitary
-    U = np.eye(2**4)
+    U = np.eye(2**5)
 
     # hadamard combo to get started
-    H = np.kron(kronjob([op1['h']],[0,0]), np.eye(4))
+    H = np.kron(kronjob([op1['h']],[0,0]), np.eye(8))
     U = H @ U
 
     # controlled nots
-    U = np.kron(op1['cx'],op1['cx']) @ U
+    U = kronjob([op1['cx'], op1['id']], [0,0,1]) @ U
 
     # some local operators
-    U = kronjob([op1['id'],op1['t'],op1['s']],[2,1,2,0]) @ U
+    U = kronjob([op1['id'],op1['t'],op1['s']],[2,1,2,0,0]) @ U
 
     # some more controlled nots
-    U = kronjob([op1['cx'], op1['id']], [1,0,1]) @ U
+    U = kronjob([op1['cx'], op1['id']], [1,0,1,1]) @ U
 
     # hit some phase gates
-    U = kronjob([op1['s'], op1['id']], [1,1,0,1]) @ U
+    U = kronjob([op1['s'], op1['id']], [1,1,0,1,1]) @ U
+
+    # finally some T gate action
+    U = kronjob([op1['id'],op1['t'],op1['s']],[1,1,1,2,0])
 
     return U
 
