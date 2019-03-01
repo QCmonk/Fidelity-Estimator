@@ -86,40 +86,6 @@ def eye_like(m):
     dim = np.shape(m)[0]
     return np.eye(dim)
 
-def operator_find(gen, depth=2):
-    """
-    Computes all unique stabilisers given the list from gen. Assumes Pauli operators.
-    """
-    # stabiliser storage
-    stabilisers = []
-
-    # max depth of stabiliser
-    max_depth = len(gen)+1
-
-    # list of generator identifiers
-    indices = range(0, len(gen))
-
-    # iterate over length N stabiliser
-    for i in range(1, max_depth):
-
-        # generate every unique 
-        gen_combs = set(list(combinations(indices, i)))
-
-        # iterate over combinations and add to 
-        for comb in gen_combs:
-            
-            # create new tblet
-            stab = eye_like(gen[0])
-            for k in comb: 
-
-                # add generator to stabiliser sequence
-                stab = stab @ gen[k]
-
-            # add new stabiliser to set
-            stabilisers.append(stab)
-
-    return stabilisers
-
 
 def exp_val_av(stabiliser, state, urot):
     """
@@ -178,13 +144,46 @@ def bures_est(alpha_est, state):
 
     return bures(state, state_est)
 
+def random_Ugen(object):
+    """
+    generator that takes array of random unitaries as input and returns a generator object
+    producing matrix product arrays.
+    """
+    def __init__(self, Us, N):
+        # fucking really? What is the point?
+        self.Us = Us
+        # total number of unitaries
+        self.num = np.shape(Us)[2]
+        # current iteration
+        self.n = 0
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        return self.next()
+
+    def next(self):
+        """
+        Compute next matrix product operator
+        """
+        if self.n < self.num:
+            mpo_rand = mp.MPArray.from_array_global(self.Us[:,:,self.n].reshape([2]*2**N), ndims=2)
+            self.n += 1
+            return mpo_rand
+
+        # end generation
+        else:
+            raise StopIteration
+
+
 def info(m):
     """
     prints relevant MPA information.
     """
     print(len(m), m.ndims, m.ranks)
 
-def mpojob(mpas, selector):
+def mpojob(mpas, selector, relerr=1e-6):
     """
     stacks the set of mpas in the order specified by selector
     """
@@ -192,9 +191,14 @@ def mpojob(mpas, selector):
     for sel in selector:
         prod_chain.append(mpas[sel])
 
-    return mp.chain(iter(prod_chain))
+    # compute tensor chain
+    chained = mp.chain(iter(prod_chain))
+    # compress output rank to within tolerance
+    chained.compress("svd", relerr=relerr)
 
-def MPA_rep(mpa, mpb, reps):
+    return chained
+
+def mporep(mpa, mpb, reps, relerr=1e-6):
     """
     constructs the MPA [mpa, mpb_1, mpb_2....mpb_reps]
     """
@@ -203,8 +207,11 @@ def MPA_rep(mpa, mpb, reps):
     prod_chain.insert(0, mpa)
 
     # construct tensor chain
-    return mp.chain(iter(prod_chain))
+    chained = mp.chain(iter(prod_chain))
+    # compress
+    chained.compress("svd", relerr=relerr)
 
+    return chained
 
 def bell_gen(N=2):
     """
@@ -216,7 +223,7 @@ def bell_gen(N=2):
     mps = mp.MPArray.from_kron([np.array([1,0])]*N)
 
     # generate entanglement operator in MPO form
-    hadamard_mpo = MPA_rep(mpo_dict["h"], mpo_dict["id"], reps=N-1)
+    hadamard_mpo = mporep(mpo_dict["h"], mpo_dict["id"], reps=N-1)
     cx_mpo = mp.chain([mpo_dict["id"]]*N)
     for i in range(0,N-1):
         # construct selector for iteration
@@ -240,7 +247,7 @@ def bell_gen(N=2):
 
 
 
-def bell_stab_gen_old(N=2):
+def bell_stab_gen(N=2):
     """
     Compute the generators for an N qubit Bell state |\\psi^+>.
     """
@@ -248,8 +255,8 @@ def bell_stab_gen_old(N=2):
     assert N%2==0, "Bell states must have even number of qubits" 
 
     # default XXX...X generator
-    
-    generators = [kronjob([op1["id"],op1["x"],op1["z"]],[1]*N)]
+
+    generators = [mpojob([mpo_dict['x']], [0]*N)]
 
     # iterate over maximum number of generators needed (Lemma 2)
     for i in range(1, int(N/2) + 1):
@@ -257,8 +264,8 @@ def bell_stab_gen_old(N=2):
         selector = list([0]*N)
         # select Z_n otimes Z_n-1
         selector[i-1:i+1] = (1,1)
-        new_gen = kronjob([op1["id"], op1["z"]], selector)
-
+        # construct stabiliser generator
+        new_gen = mpojob([mpo_dict["id"], mpo_dict["z"]], selector)
         # add to set
         generators.append(new_gen)
 
@@ -280,11 +287,49 @@ def base_gen(N=2):
     return base
 
 
-def UniU_error(states=100):
+def operator_find(gen, N, relerr=1e-6):
+    """
+    Computes all unique stabilisers given the list from gen. Assumes Pauli operators.
+    """
+    # stabiliser storage
+    stabilisers = []
+
+    # max depth of stabiliser
+    max_depth = len(gen)+1
+
+    # list of generator identifiers
+    indices = range(0, len(gen))
+
+    # iterate over length N stabiliser
+    for i in range(1, max_depth):
+
+        # generate every unique 
+        gen_combs = set(list(combinations(indices, i)))
+
+        # iterate over combinations and add to 
+        for comb in gen_combs:
+            
+            # create new tblet
+            stab = mpojob([mpo_dict["id"]], [0]*N)
+            for k in comb: 
+
+                # add generator to stabiliser sequence
+                stab = mp.dot(gen[k], stab)
+
+            # add new stabiliser to set
+            stabilisers.append(stab)
+
+
+
+    return stabilisers
+
+
+
+def UniU_error(perturbations=100, exact=True):
     """
     Check error rates on verification technique
     """
-    N = 2
+    N = 24
     
     # generate entangled states
     rho = bell_gen(N=N)
@@ -293,53 +338,72 @@ def UniU_error(states=100):
     bell_gstab = bell_stab_gen(N=N)
 
     # generate interesting unitary and its stabilisers 
-    Uni_U = op1["cx"] #np.kron(Universal_U(), np.eye(2**(N//2)))
+    Uni_U = mporep(mpo_dict["s"], mpo_dict["id"], N-1) #np.kron(Universal_U(), np.eye(2**(N//2)))
 
     # apply to entangled state
-    rho = Uni_U @ rho8 @ dagger(Uni_U)
+    rho = mp.dot(Uni_U, rho)
 
     # evolve generators under unitary
-    gstab = [Uni_U @ stb @ dagger(Uni_U) for stb in bell_gstab]
+    gstab = [mp.dot(mp.dot(Uni_U, stb), Uni_U.adj()) for stb in bell_gstab]
 
     # generate stabiliser set 
-    stabilisers = operator_find(gstab)
+    stabilisers = operator_find(gstab, N=N)
 
-    # apply to entangled state
-    rho = Uni_U @ rho8 @ dagger(Uni_U)
+    # apply to entangled state and convert to MPO for measurement phase
+    rho = mp.mpsmpo.mps_to_mpo(rho)
 
     # generate unitary perturbations
-    Us = random_U(N=N//2, num=states)
+    #Us = random_U(N=N//2, num=states)
+
+    # convert to matrix product states generator
+    #Us = random_Ugen(Us, N=N//2)
 
     # calculate the estimation error
     error = []
-    for i in range(0,states):
+    for i in range(0, perturbations):
         print("Now computing unitary perturbation {}".format(i))
 
         # copy state (why?)
-        rho_c = np.copy(rho)
+        rho_p = rho.copy()
 
-        # compute a local perturbation
-        U_p = np.kron(Us[:,:,i], np.eye(2**(N//2)))
-        rho_p = U_p @ rho_c @ dagger(U_p)
+        # compute a local perturbation - non-compliant with MPS right now
+        #U_p = np.kron(Us[:,:,i], np.eye(2**(N//2)))
+        #rho_p = mp.dot(U_p, rho_c)
 
-        # estimate expectation values from finite number of outcomes
-        a_est, a_uncert = angle_estimate(stabilisers, rho_p, N=N, shots=8000)
 
-        if np.abs(np.real(bures(rho_c, rho_p) - a_est)) > 0.5:
-            print(a_est)
-            continue
+        # compute expectation values exactly or with finite samples
+        if exact:
+            Q = 0.0
+            # iterate over stabiliser measurements
+            for stab_proj in stabilisers:
+                # add to Q sum
+                Q += (1 + mp.trace(mp.dot(stab_proj, rho_p)))/2
+            # estimate angle 
+            a_est = theta_compute(Q, N=N)
+
+        else:
+            # estimate expectation values from finite number of outcomes
+            a_est, a_uncert = angle_estimate(stabilisers, rho_p, N=N, shots=8000)
+
+            if np.abs(np.real(bures(rho_c, rho_p) - a_est)) > 0.5:
+                print(a_est)
+                continue
 
         # compute angle estimate error
-        error.append(np.real(bures(rho_c, rho_p) - a_est))
+        error.append(a_est)
+        #error.append(np.real(bures(rho, rho_p) - a_est))
 
-    n,bins,patches = plt.hist(x=error, bins=len(error)//10, alpha=0.65, color='red', histtype='step')
-    plt.xlabel("Error")
-    plt.ylabel("Counts")
-    plt.title("Error distribution for {} qubit Clifford+T unitary".format(N//2))
-    plt.show()
+    if exact:
+        print("Average estimation error for {} perturbations: {:.3f}".format(perturbations, np.mean(error)))
+    else:
+        n,bins,patches = plt.hist(x=error, bins=len(error)//10, alpha=0.65, color='red', histtype='step')
+        plt.xlabel("Error")
+        plt.ylabel("Counts")
+        plt.title("Error distribution for {} qubit Clifford+T unitary".format(N//2))
+        plt.show()
 
 
-UniU_error(states=500)
+UniU_error(perturbations=5, exact=True)
 exit()
 
 # define singlet state
