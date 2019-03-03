@@ -448,6 +448,13 @@ def isdensity(rho):
     res &= np.isclose(np.trace(rho), 1.0)              # trace one
     return res
 
+def eye_like(m):
+    """
+    Returns identity matrix with same dims as square matrix m.
+    """
+    dim = np.shape(m)[0]
+    return np.eye(dim)
+
 
 def mem_check(dims, type=np.float64):
     """
